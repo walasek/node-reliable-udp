@@ -1,0 +1,32 @@
+{
+  "name": "reliable-udp",
+  "version": "0.0.1",
+  "description": "Reliable communication over a udp socket.",
+  "main": "index.js",
+  "scripts": {
+    "test": "node test.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/WalasPrime/node-reliable-udp.git"
+  },
+  "keywords": [
+    "nodejs",
+    "udp",
+    "streaming"
+  ],
+  "author": "Karol Walasek <coreconviction@gmail.com>",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/WalasPrime/node-reliable-udp/issues"
+  },
+  "homepage": "https://github.com/WalasPrime/node-reliable-udp#readme",
+  "devDependencies": {
+    "blue-tape": "^1.0.0",
+    "tape": "^4.9.1"
+  },
+  "dependencies": {
+    "debug": "^3.1.0",
+    "stun": "^1.2.0"
+  }
+}
