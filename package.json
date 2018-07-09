@@ -2,6 +2,9 @@
   "name": "reliable-udp",
   "version": "0.0.1",
   "description": "Reliable communication over a udp socket.",
+  "engines": {
+    "node": ">=8.9.0"
+  },
   "main": "index.js",
   "scripts": {
     "test": "node test.js"

@@ -4,8 +4,25 @@ A reliable communication protocol over UDP with holepunching for Node.js.
 
 ---
 
-Why?
----------------
+## Why
 
 Implementing a realiable holepunching with TCP is very tricky and does not work on every configuration. This project aims to deliver a tool to establish a reliable communication stream (TCP-like) over UDP for use in P2P systems.
 
+## Installation
+
+Node `>=8.9.0` is required.
+
+```bash
+npm install --save reliable-udp
+```
+
+To perform tests use:
+
+```bash
+cd node_modules/reliable-udp
+npm t
+```
+
+## Usage
+
+_TODO, the library is not usable right now_
