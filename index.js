@@ -8,6 +8,10 @@ const debug = {
 
 const { STUN_BINDING_REQUEST, STUN_ATTR_XOR_MAPPED_ADDRESS } = stun.constants;
 
+/**
+ * @class
+ * Allows reliable communication over UDP communication protocol.
+ */
 class ReliableUDPInstance {
 	constructor(){
 

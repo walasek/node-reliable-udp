@@ -61,7 +61,14 @@ class TimeoutGate {
 	 * @description
 	 * A combination of {@link TimeoutGate#isActive} and {@link TimeoutGate#dismiss}. When this class is used with a function that reacts to an event with a timeout then this method should be used in the begining. It will properly dismiss the timer and not progress if the timeout function was already called for some reason.
 	 * @example
-	 * if(!timeout.enterGate())return; // Results came too late
+	 * const guard = new TimeoutGate(100, () => { // Only wait for 100ms
+	 * 	console.log('Waited too long for the operation to finish...');
+	 * });
+	 * myExpensiveAsyncOperation(() => {
+	 * 	if(!guard.enterGate())return; // Results came too late, already handled the timeout
+	 * 	console.log('Yay, got my results, and the timeout handler will not be called!');
+	 * });
+	 * @returns {boolean} True if this timeout gate did not call it's handling function yet.
 	 */
 	enterGate(){
 		if(this.isActive()){
