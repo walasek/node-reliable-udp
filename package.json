@@ -7,7 +7,7 @@
   },
   "main": "index.js",
   "scripts": {
-    "test": "node test.js",
+    "test": "node test.js | node node_modules/faucet/bin/cmd",
     "docs": "node node_modules/jsdoc/jsdoc.js -c jsdoc.json"
   },
   "repository": {
@@ -26,10 +26,10 @@
   },
   "homepage": "https://github.com/WalasPrime/node-reliable-udp#readme",
   "devDependencies": {
-    "blue-tape": "^1.0.0",
     "docdash": "^0.4.0",
+    "faucet": "0.0.1",
     "jsdoc": "^3.5.5",
-    "tape": "^4.9.1"
+    "zora": "^2.0.1"
   },
   "dependencies": {
     "debug": "^3.1.0",

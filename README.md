@@ -35,6 +35,16 @@ The source is documented with JSDoc. To generate the documentation use:
 npm run docs
 ```
 
+Extra debugging information is printed using the `debug` module:
+
+```bash
+DEBUG=reliable-udp:* npm t
+```
+
 The documentation will be put in the new `docs` directory.
 
-To introduce an improvement please fork this project, commit changes in a new branch to your fork and add a pull request on this repository pointing at your fork.
+To introduce an improvement please fork this project, commit changes in a new branch to your fork and add a pull request on this repository pointing at your fork. Please follow these style recommendations when working on the code:
+* Use tabs (yup).
+* Use `async`/`await` and/or `Promise` where possible.
+* Features must be properly tested.
+* New methods must be properly documented with `jscode` style comments.
