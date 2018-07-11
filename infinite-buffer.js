@@ -54,6 +54,19 @@ class InfiniteBuffer {
 		return this.partitions[0];
 	}
 	/**
+	 * Return the n-th byte of the buffer.
+	 * @param {Number} index
+	 */
+	get(index){
+		let at = 0;
+		for(let partition = 0; partition < this.partitions.length; partition++){
+			if(at+this.partitions[partition].length > index)
+				return this.partitions[partition][index-at];
+			at += this.partitions[partition].length;
+		}
+		return null;
+	}
+	/**
 	 * Returns the total size of the data in the buffer.
 	 * @returns {Number}
 	 */

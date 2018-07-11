@@ -3,7 +3,11 @@
 // https://github.com/WalasPrime/node-reliable-udp
 const EventEmitter = require('events');
 const XBuffer = require('./infinite-buffer');
+const {DATAGRAM_CODES, PROTOCOL_ID} = require('./const');
 const debug = require('debug')('reliable-udp:sessions');
+
+const MAX_PACKET_SIZE = 1500; // MTU
+
 
 /**
  * @class
@@ -25,6 +29,7 @@ class StreamedUDPSession extends EventEmitter {
 		this.recv_count = 0 >>> 0; // Force Uint32
 		this.send_count = 0 >>> 0;
 		this.send_buf = [];
+		this.send_buf_length = 0;
 		this.ooo_packets = 0; // Out-of-order
 	}
 	/**
@@ -65,16 +70,17 @@ class StreamedUDPSession extends EventEmitter {
 		return packet;
 	}
 	/**
-	 * Send some data over this session.
+	 * Send a datagram over this session.
 	 * @param {Buffer} raw
 	 * @returns {Promise}
 	 */
-	async sendPacket(raw){
-		await new Promise((res, rej) => {
+	sendPacket(raw, code){
+		return new Promise((res, rej) => {
+			code = code || 0;
 			const packet = this.buildOutgoingPacket(raw);
 			debug(`Sending packet of size ${packet.length} to ${this.address}:${this.port} with id ${this.send_count}`);
 			this.send_count += packet.length;
-			this.socket.send(packet, this.port, this.address, (err) => {
+			this.socket.send([Buffer.from([PROTOCOL_ID, code]), packet], this.port, this.address, (err) => {
 				if(err){
 					debug(`Sending of packet failed with ${err}`);
 					return rej(err);
@@ -82,6 +88,34 @@ class StreamedUDPSession extends EventEmitter {
 				res();
 			});
 		});
+	}
+	/**
+	 * Send generic data over this session.
+	 * @param {Buffer} data
+	 * @returns {Promise}
+	 */
+	sendBuffer(data){
+		return new Promise((res, rej) => {
+			this.send_buf_length += data.length;
+			this.send_buf.push(data);
+			debug(`Queuing ${data.length} bytes to be sent to ${this.address}:${this.port}`);
+			// TODO: If buf_length exceeds maximum then stall
+			setImmediate(() => this.tick());
+			res();
+		});
+	}
+	/**
+	 * Sends queued outgoing packets.
+	 */
+	tick(){
+		// TODO: Limit ammount of packets in case of a large queue?
+		debug(`Handling transfer of ${this.send_buf_length} bytes to ${this.address}:${this.port}`)
+		this.send_buf.forEach((buf) => {
+			for(let i = 0; i < buf.length; i += MAX_PACKET_SIZE)
+				this.sendPacket(buf.slice(i, i+MAX_PACKET_SIZE), DATAGRAM_CODES.RELIABLE_UDP_DATA);
+		});
+		this.send_buf = [];
+		this.send_buf_length = 0;
 	}
 }
 

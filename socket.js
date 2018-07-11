@@ -3,6 +3,7 @@
 // https://github.com/WalasPrime/node-reliable-udp
 const Session = require('./session');
 const Timeout = require('./timeout');
+const {DATAGRAM_CODES, PROTOCOL_ID} = require('./const');
 const crypto = require('crypto');
 const stun = require('stun');
 const EventEmitter = require('events');
@@ -14,13 +15,6 @@ const debug = {
 };
 
 const { STUN_BINDING_REQUEST, STUN_ATTR_XOR_MAPPED_ADDRESS } = stun.constants;
-const PROTOCOL_ID = 0xAF;
-const DGRAM_CODES = {
-	RELIABLE_UDP_HELLO: 10,
-	RELIABLE_UDP_ESTABLISH: 11,
-	RELIABLE_UDP_DATA: 20,
-	RELIABLE_UDP_RESEND_REQ: 30,
-};
 
 /**
  * @class
@@ -122,14 +116,14 @@ class ReliableUDPSocket extends EventEmitter {
 	 * @returns {Buffer}
 	 */
 	buildHelloDatagram(){
-		return Buffer.from([PROTOCOL_ID, DGRAM_CODES.RELIABLE_UDP_HELLO]);
+		return Buffer.from([PROTOCOL_ID, DATAGRAM_CODES.RELIABLE_UDP_HELLO]);
 	}
 	/**
 	 * Create a connection establish datagram
 	 * @returns {Buffer}
 	 */
 	buildEstablishDatagram(){
-		return Buffer.from([PROTOCOL_ID, DGRAM_CODES.RELIABLE_UDP_ESTABLISH]);
+		return Buffer.from([PROTOCOL_ID, DATAGRAM_CODES.RELIABLE_UDP_ESTABLISH]);
 	}
 	/**
 	 * @description
@@ -171,11 +165,11 @@ class ReliableUDPSocket extends EventEmitter {
 	 * @param {String} address
 	 * @param {Number} port
 	 * @param {Number} [timeout=0] If a timeout is specified then the promise will reject after that time (miliseconds).
-	 * @returns {Promise} Resolved when the peer has answered to a hello. Otherwise rejected after a timeout.
+	 * @returns {Promise(StreamedUDPSession)} Resolved when the peer has answered to a hello. Otherwise rejected after a timeout.
 	 */
 	connect(address, port){
 		return new Promise(async (res, rej) => {
-			const guard = new Timeout(3000, () => rej('Reliable connection timeout'));
+			const guard = new Timeout(3000, () => rej(`Reliable connection to ${this.address}:${this.port} timeout`));
 			// 1. Send a hello packet, add host to a lightweight waiting list. (retry if needed)
 			// 2. When a hello is received from this host then send an establish packet.
 			// 3. Assume the connection has been established.
@@ -183,6 +177,7 @@ class ReliableUDPSocket extends EventEmitter {
 			const hash = this.rinfoToHash(rinfo).toString('hex');
 			this.hello_queue[hash] = rinfo;
 			const hello = this.buildHelloDatagram();
+			debug.udp(hello.toString('hex'));
 			await this.send(hello, port, address);
 			if(!guard.isActive())return;
 			const self = this;
@@ -192,8 +187,8 @@ class ReliableUDPSocket extends EventEmitter {
 					guard.dismiss();
 					await self.send(self.buildEstablishDatagram(), port, address);
 					delete self.hello_queue[hash];
-					self.sessions[hash] = new Session(null, address, port);
-					res();
+					self.sessions[hash] = new Session(this.socket, address, port);
+					res(self.sessions[hash]);
 				}else{
 					self.once('expected-hello-recv', _check);
 				}
@@ -211,7 +206,7 @@ class ReliableUDPSocket extends EventEmitter {
 	handleDatagram(datagram, rinfo){
 		const session_id = this.rinfoToHash(rinfo).toString('hex');
 		// TODO: Add firewall rules
-		debug.socket(`Got ${datagram.length} bytes from ${rinfo.address}:${rinfo.port} (session ${session_id}, ${this.sessions[session_id] ? 'existing' : 'unknown'})`);
+		debug.socket(`Got ${datagram.length} bytes from ${rinfo.address}:${rinfo.port} (session ${session_id}, ${this.sessions[session_id] ? 'existing' : 'unknown'}) = ${datagram.toString('hex')}`);
 		const protocol = datagram[0];
 		if(protocol != PROTOCOL_ID){
 			debug.socket(`Invalid protocol ${protocol}, ignoring`);
@@ -219,8 +214,7 @@ class ReliableUDPSocket extends EventEmitter {
 		}
 		const code = datagram[1];
 		switch(code){
-			// TODO: Add codes handling here
-			case DGRAM_CODES.RELIABLE_UDP_HELLO:
+			case DATAGRAM_CODES.RELIABLE_UDP_HELLO:
 				// If unexpected hello then respond with a hello, otherwise make a session
 				if(!this.hello_queue[session_id]){
 					debug.socket(`Unexpected hello from ${rinfo.address}:${rinfo.port}, replying`);
@@ -230,24 +224,41 @@ class ReliableUDPSocket extends EventEmitter {
 				}
 				this.emit('expected-hello-recv', session_id);
 				// continue to:
-			case DGRAM_CODES.RELIABLE_UDP_ESTABLISH:
+			case DATAGRAM_CODES.RELIABLE_UDP_ESTABLISH:
 				// Remote end wants to establish a connection, allow only if helloed
 				if(!this.hello_queue[session_id]){
 					debug.socket(`Host ${rinfo.address}:${rinfo.port} attempted a connection without hello`);
 					break;
 				}
 				delete this.hello_queue[session_id];
-				this.sessions[session_id] = new Session(null, rinfo.address, rinfo.port);
+				this.sessions[session_id] = new Session(this.socket, rinfo.address, rinfo.port);
 				debug.socket(`Connection with ${rinfo.address}:${rinfo.port} (${session_id}) established`);
+				this.emit('new-peer', this.sessions[session_id]);
+			break;
+			case DATAGRAM_CODES.RELIABLE_UDP_DATA:
+				if(!this.sessions[session_id]){
+					debug.socket(`Unexpected data received from ${rinfo.address}:${rinfo.port}`);
+					break;
+				}
+				this.sessions[session_id].onIncommingData(datagram.slice(2));
 			break;
 			default:
 				debug.socket(`Unknown datagram code ${code}, datagram dropped`);
 		}
 	}
-	sendRawDatagram(data, address, port){
-
+	/**
+	 * A generic method that allows sending data to any peer. Will connect if necessary.
+	 * @param {Buffer} data
+	 * @param {Number} port
+	 * @param {String} address
+	 * @returns {Promise}
+	 */
+	async sendData(data, port, address){
+		const hash = this.rinfoToHash({address, port}).toString('hex');
+		if(!this.sessions[hash])
+			await this.connect(address, port);
+		await this.sessions[hash].sendData(data);
 	}
 }
-ReliableUDPSocket.codes = DGRAM_CODES;
 
 module.exports = ReliableUDPSocket;
