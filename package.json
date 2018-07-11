@@ -28,6 +28,7 @@
   "devDependencies": {
     "docdash": "^0.4.0",
     "faucet": "0.0.1",
+    "glob": "^7.1.2",
     "jsdoc": "^3.5.5",
     "zora": "^2.0.1"
   },

@@ -4,9 +4,9 @@ A reliable communication protocol over UDP with holepunching for Node.js.
 
 ---
 
-## Why
+## Goal
 
-Implementing NAT holepunching with TCP is very tricky and does not work on every configuration. This project aims to deliver a tool to establish a reliable communication stream (TCP-like) over UDP for use in P2P systems.
+Implementing NAT holepunching with TCP is very tricky and does not work on every configuration. This project aims to deliver a tool to establish a reliable communication stream (TCP-like) over UDP for use in P2P systems. Communication stability has the priority over speed in this project.
 
 ## Installation
 
