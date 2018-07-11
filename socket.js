@@ -242,6 +242,18 @@ class ReliableUDPSocket extends EventEmitter {
 				}
 				this.sessions[session_id].onIncommingData(datagram.slice(2));
 			break;
+			case DATAGRAM_CODES.RELIABLE_UDP_RESEND_REQ:
+				if(!this.sessions[session_id]){
+					debug.socket(`Unexpected resend request received from ${rinfo.address}:${rinfo.port}`);
+					break;
+				}
+				if(datagram.length == 6){
+					const id = datagram.readUInt32BE(2);
+					this.sessions[session_id].onResendRequest(id);
+				}else{
+					debug.socket(`Invalid resend datagram from ${rinfo.address}:${rinfo.port}`);
+				}
+			break;
 			default:
 				debug.socket(`Unknown datagram code ${code}, datagram dropped`);
 		}

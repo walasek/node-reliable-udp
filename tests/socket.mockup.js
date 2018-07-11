@@ -1,14 +1,19 @@
 const debug = require('debug')('reliable-udp:socket-mockup');
 
-class SocketMockup {
-	constructor(){
+function SocketMockupDecorator(socket, options){
+	options = options || {};
+	options.loss = options.loss || 0;
 
-	}
-	send(data, port, address, callback){
-		debug(`send, got ${data.length} bytes`);
-		if(callback)
-			setImmediate(() => callback());
+	// TODO: Add packet shuffling
+	const origin = socket.send;
+	socket.send = function(){
+		// Chance to fail
+		if(Math.random() < options.loss){
+			debug(`Oops! A send call has been supressed with ${options.loss*100}% chance`);
+			return;
+		}
+		origin.apply(socket, arguments);
 	}
 }
 
-module.exports = SocketMockup;
+module.exports = SocketMockupDecorator;

@@ -1,4 +1,5 @@
 const ReliableSocket = require('../socket');
+const unreliablizeSocket = require('./socket.mockup');
 const Session = require('../session');
 const Timeout = require('../timeout');
 const XBuffer = require('../infinite-buffer');
@@ -132,5 +133,48 @@ module.exports = async function(test){
 		});
 		await h1.close();
 		await h2.close();
+	});
+
+	await test('Communication across lossy links can still be supported', async (t) => {
+		async function _doLossyTest(loss_chance){
+			const h1 = new ReliableSocket();
+			const h2 = new ReliableSocket();
+			await t.test('Lossy communication @ '+(loss_chance*100)+'%', async (t) => {
+				return new Promise(async (res, rej) => {
+					await h1.bind();
+					await h2.bind();
+					const sess1 = await h1.connect('127.0.0.1', h2.port);
+					t.ok(sess1 instanceof Session);
+					await new Promise((res) => setTimeout(res, 500));
+					unreliablizeSocket(h1.socket, {loss: loss_chance});
+					unreliablizeSocket(h2.socket, {loss: loss_chance});
+					const sess2 = h2.sessions[Object.keys(h2.sessions)[0]];
+					const MESSAGES = 100;
+					const buf = Buffer.alloc(MESSAGES);
+					const recv = Buffer.alloc(MESSAGES);
+					let recv_off = 0;
+					const guard = new Timeout(500, () => rej('Communication failed'));
+					for(let i = 0; i < buf.length; i++)
+						buf[i] = (Math.random()*255) >>> 0;
+					for(let i = 0; i < MESSAGES; i++)
+						sess1.sendBuffer(Buffer.from([buf[i]]));
+					sess2.on('data', (data) => {
+						if(!guard.isActive())return;
+						data.copy(recv, recv_off);
+						recv_off += data.length;
+						if(recv_off >= MESSAGES){
+							// Done.
+							res();
+						}
+					});
+				});
+			});
+			await h1.close();
+			await h2.close();
+		}
+		await _doLossyTest(0);
+		await _doLossyTest(0.05);
+		await _doLossyTest(0.1);
+		await _doLossyTest(0.15);
 	});
 };
