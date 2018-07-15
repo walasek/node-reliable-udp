@@ -6,6 +6,16 @@ const {DATAGRAM_CODES, PROTOCOL_ID} = require('./const');
 const debug = require('debug')('reliable-udp:sessions');
 
 const MAX_PACKET_SIZE = 1500; // MTU
+const MAX_OOO_BUFFER = MAX_PACKET_SIZE*50;
+const MAX_OOO_PACKETS = 500;
+const MAX_SEND_BUFFER = MAX_PACKET_SIZE*50;
+const MAX_SEND_PACKETS = 500;
+
+function uint16(v){
+	const buf = Buffer.allocUnsafe(2);
+	buf.writeInt16BE(v);
+	return buf;
+}
 
 /**
  * @class
@@ -29,26 +39,44 @@ class StreamedUDPSession extends EventEmitter {
 		this.send_count = 0 >>> 0;
 		this.send_buf = [];
 		this.send_buf_length = 0;
-		this.ooo_packets = 0; // Out-of-order
+		this.ooo_packets = {}; // Out-of-order
+		this.ooo_packets_length = 0 >>> 0;
+		this.ooo_max_id = 0;
+		this.data_packets = {};
+		this.data_packets_length = 0;
+		this.resend_request_timeout = null;
+		this.resend_request_id = 0;
+	}
+	close(){
+		if(this.resend_request_timeout)
+			clearTimeout(this.resend_request_timeout);
 	}
 	/**
 	 * Process incomming raw data. Emit events when complete messages are decoded.
 	 * @param {Buffer} raw Raw data received from the network.
 	 */
 	onIncommingData(raw){
-		debug(`Received ${raw.length} bytes on session with ${this.address}:${this.port}`);
 		const at = raw.readUInt16BE();
+		debug(`Received ${raw.length} bytes on session with ${this.address}:${this.port}, id ${at}`);
 		if(at !== this.recv_count){
-			this.ooo_packets++;
-			debug(`Packet out of order, expected ${this.recv_count} but got id ${at}`);
+			const can_queue = this.ooo_packets_length < MAX_OOO_BUFFER && Object.keys(this.ooo_packets).length < MAX_OOO_PACKETS;
+			debug(`Packet out of order, expected ${this.recv_count} but got id ${at}, ${can_queue ? 'will' : 'won\'t'} queue`);
 			// TODO: Implement sending a resend request
-			// TODO: Implement out of order packet queuing for improved performance
+			if(!can_queue){
+				debug(`Maximum out of order packets reached, will not queue`);
+			}else{
+				this.ooo_packets[at] = raw;
+				this.ooo_packets_length += raw.length;
+				this.ooo_max_id = Math.max(at, this.ooo_max_id); // TODO: Potential remote DDOS attack if an arbitrary max is sent
+				this.outOfOrderHandle(this.recv_count);
+			}
 			return;
 		}
 		// TODO: Implement messaging
 		//this.recv_buf.append(raw.slice(2));
 		const data = raw.slice(2);
 		this.recv_count += raw.length;
+		this.properPacketHandle(at);
 		debug(`Emitting ${data.length} of raw data`);
 		/**
 		 * Emitted when a packet of data has been received (properly ordered).
@@ -56,22 +84,37 @@ class StreamedUDPSession extends EventEmitter {
 		 * @type {Buffer}
 		 */
 		this.emit('data', data);
+		const next_packet = this.ooo_packets[this.recv_count];
+		if(next_packet){
+			debug(`Packet ${this.recv_count} will be read from cache`);
+			setImmediate(() => this.onIncommingData(next_packet));
+			const len = next_packet.length;
+			delete this.ooo_packets[this.recv_count];
+			this.ooo_packets_length -= len;
+		}
 	}
 	/**
 	 * Handle a situation where a peer requests resending of a packet.
 	 * @param {Number} id
 	 */
 	onResendRequest(id){
-		// TODO: Implement me
+		const obj = this.data_packets[id];
+		if(!obj){
+			debug(`Remote end requested resend of ${id} but that packet was already forgotten, link may be unstable`);
+		}else{
+			debug(`Re-sending packet ${id} by remote request`);
+			this.socket.send([Buffer.from([PROTOCOL_ID, DATAGRAM_CODES.RELIABLE_UDP_DATA]), obj], this.port, this.address);
+		}
 	}
 	/**
 	 * Prepare a packet with data to send over UDP.
 	 * @param {Buffer} data The data to be put in the packet
+	 * @param {Number} id Overwrite the packet ordering number
 	 * @returns {Buffer} The data with some additional metadata
 	 */
-	buildOutgoingPacket(data){
+	buildOutgoingPacket(data, id){
 		const packet = Buffer.allocUnsafe(data.length + 2)
-		packet.writeUInt16BE(this.send_count);
+		packet.writeUInt16BE(id || this.send_count);
 		data.copy(packet, 2);
 		return packet;
 	}
@@ -109,9 +152,16 @@ class StreamedUDPSession extends EventEmitter {
 		return new Promise((res, rej) => {
 			code = code || 0;
 			const packet = this.buildOutgoingPacket(raw);
+			this.data_packets_length += packet.length;
+			this.data_packets[this.send_count] = packet;
+			if(this.data_packets_length > MAX_SEND_BUFFER || Object.keys(this.data_packets).length > MAX_SEND_PACKETS){
+				// TODO: Make this faster
+				const min = Math.min(Object.keys(this.data_packets).map((v) => parseInt(v)));
+				this.data_packets_length -= this.data_packets[min].length;
+				delete this.data_packets[min];
+			}
 			debug(`Sending packet of size ${packet.length} to ${this.address}:${this.port} with id ${this.send_count}`);
 			this.send_count += packet.length;
-			// TODO: Remember the packet for some time in case the other end doesn't receive it
 			this.socket.send([Buffer.from([PROTOCOL_ID, code]), packet], this.port, this.address, (err) => {
 				if(err){
 					debug(`Sending of packet failed with ${err}`);
@@ -140,6 +190,7 @@ class StreamedUDPSession extends EventEmitter {
 	 * Sends queued outgoing packets.
 	 */
 	tick(){
+		if(this.send_buf_length == 0)return;
 		// TODO: Limit ammount of packets in case of a large queue?
 		debug(`Handling transfer of ${this.send_buf_length} bytes to ${this.address}:${this.port}`)
 		this.send_buf.forEach((buf) => {
@@ -148,6 +199,26 @@ class StreamedUDPSession extends EventEmitter {
 		});
 		this.send_buf = [];
 		this.send_buf_length = 0;
+	}
+	/**
+	 * Call this in case an out of order packet was encountered.
+	 * @param {Number} id The id of an expected packet.
+	 */
+	outOfOrderHandle(id){
+		if(this.resend_request_timeout)return;
+		this.resend_request_timeout = setTimeout(() => {
+			this.sendResendRequest(id);
+			this.resend_request_timeout = null;
+			this.outOfOrderHandle(id);
+		}, 1);
+	}
+	/**
+	 * Call this in case a proper packet was encountered. Cancels out of order related timeouts.
+	 */
+	properPacketHandle(id){
+		this.resend_request_timeout = clearTimeout(this.resend_request_timeout);
+		if(id < this.ooo_max_id)
+			this.outOfOrderHandle(this.recv_count);
 	}
 }
 

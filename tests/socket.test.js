@@ -140,7 +140,7 @@ module.exports = async function(test){
 			const h1 = new ReliableSocket();
 			const h2 = new ReliableSocket();
 			await t.test('Lossy communication @ '+(loss_chance*100)+'%', async (t) => {
-				return new Promise(async (res, rej) => {
+				await new Promise(async (res, rej) => {
 					await h1.bind();
 					await h2.bind();
 					const sess1 = await h1.connect('127.0.0.1', h2.port);
@@ -164,6 +164,9 @@ module.exports = async function(test){
 						recv_off += data.length;
 						if(recv_off >= MESSAGES){
 							// Done.
+							t.equal(MESSAGES, recv_off, 'Data length is ok');
+							t.equal(Buffer.compare(recv, buf), 0, 'Received data is valid');
+							guard.dismiss();
 							res();
 						}
 					});
@@ -176,5 +179,11 @@ module.exports = async function(test){
 		await _doLossyTest(0.05);
 		await _doLossyTest(0.1);
 		await _doLossyTest(0.15);
+		await _doLossyTest(0.2);
+		await _doLossyTest(0.25);
+		await _doLossyTest(0.3);
+		await _doLossyTest(0.35);
+		await _doLossyTest(0.4);
+		await _doLossyTest(0.45);
 	});
 };

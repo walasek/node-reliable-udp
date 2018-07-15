@@ -1,6 +1,6 @@
 const Session = require('../session');
 const Timeout = require('../timeout');
-const Socket = require('./socket.mockup');
+const unreliablizeSocket = require('./socket.mockup');
 
 module.exports = async function(test){
 	await test('Session objects emit data on receive (raw and packed)', async (t) => {
@@ -23,7 +23,7 @@ module.exports = async function(test){
 
 	await test('Session protocol increments data counters after sending', async (t) => {
 		return new Promise(async (res, rej) => {
-			const socket = new Socket();
+			const socket = unreliablizeSocket();
 			const sess = new Session(socket);
 			const d1 = Buffer.from([1, 2, 3]);
 			const p1 = sess.buildOutgoingPacket(d1);

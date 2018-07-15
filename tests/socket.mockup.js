@@ -3,6 +3,9 @@ const debug = require('debug')('reliable-udp:socket-mockup');
 function SocketMockupDecorator(socket, options){
 	options = options || {};
 	options.loss = options.loss || 0;
+	socket = socket || {
+		send: (_1, _2, _3, cb) => {cb();}
+	};
 
 	// TODO: Add packet shuffling
 	const origin = socket.send;
@@ -14,6 +17,8 @@ function SocketMockupDecorator(socket, options){
 		}
 		origin.apply(socket, arguments);
 	}
+
+	return socket;
 }
 
 module.exports = SocketMockupDecorator;

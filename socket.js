@@ -75,6 +75,7 @@ class ReliableUDPSocket extends EventEmitter {
 	close(){
 		return new Promise((res, rej) => {
 			debug.udp(`Socket bound to ${this.address}:${this.port} now closing`);
+			Object.keys(this.sessions).forEach((id) => this.sessions[id].close());
 			if(this.socket)
 				return this.socket.close(res);
 			res();
@@ -247,11 +248,23 @@ class ReliableUDPSocket extends EventEmitter {
 					debug.socket(`Unexpected resend request received from ${rinfo.address}:${rinfo.port}`);
 					break;
 				}
-				if(datagram.length == 6){
-					const id = datagram.readUInt32BE(2);
+				if(datagram.length == 4){
+					const id = datagram.readUInt16BE(2);
 					this.sessions[session_id].onResendRequest(id);
 				}else{
 					debug.socket(`Invalid resend datagram from ${rinfo.address}:${rinfo.port}`);
+				}
+			break;
+			case DATAGRAM_CODES.RELIABLE_UDP_DATA_ACK:
+				if(!this.sessions[session_id]){
+					debug.socket(`Unexpected data ack received from ${rinfo.address}:${rinfo.port}`);
+					break;
+				}
+				if(data.length == 4){
+					const id = datagram.readUInt16BE(2);
+					this.sessions[session_id].onDataAck(id);
+				}else{
+					debug.socket(`Invalid data ack datagram from ${rinfo.address}:${rinfo.port}`);
 				}
 			break;
 			default:
