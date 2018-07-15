@@ -6,9 +6,9 @@ const {DATAGRAM_CODES, PROTOCOL_ID} = require('./const');
 const debug = require('debug')('reliable-udp:sessions');
 
 const MAX_PACKET_SIZE = 1500; // MTU
-const MAX_OOO_BUFFER = MAX_PACKET_SIZE*50;
+const MAX_OOO_BUFFER = MAX_PACKET_SIZE*25;
 const MAX_OOO_PACKETS = 500;
-const MAX_SEND_BUFFER = MAX_PACKET_SIZE*50;
+const MAX_SEND_BUFFER = MAX_PACKET_SIZE*25;
 const MAX_SEND_PACKETS = 500;
 
 function uint16(v){
@@ -46,10 +46,13 @@ class StreamedUDPSession extends EventEmitter {
 		this.data_packets_length = 0;
 		this.resend_request_timeout = null;
 		this.resend_request_id = 0;
+		this.status_timeout = null;
 	}
 	close(){
 		if(this.resend_request_timeout)
 			clearTimeout(this.resend_request_timeout);
+		if(this.status_timeout)
+			clearTimeout(this.status_timeout);
 	}
 	/**
 	 * Process incomming raw data. Emit events when complete messages are decoded.
@@ -59,6 +62,7 @@ class StreamedUDPSession extends EventEmitter {
 		const at = raw.readUInt16BE();
 		debug(`Received ${raw.length} bytes on session with ${this.address}:${this.port}, id ${at}`);
 		if(at !== this.recv_count){
+			if(at < this.recv_count)return; // Too old for us
 			const can_queue = this.ooo_packets_length < MAX_OOO_BUFFER && Object.keys(this.ooo_packets).length < MAX_OOO_PACKETS;
 			debug(`Packet out of order, expected ${this.recv_count} but got id ${at}, ${can_queue ? 'will' : 'won\'t'} queue`);
 			// TODO: Implement sending a resend request
@@ -77,6 +81,8 @@ class StreamedUDPSession extends EventEmitter {
 		const data = raw.slice(2);
 		this.recv_count += raw.length;
 		this.properPacketHandle(at);
+		if(this.socket)
+			this.socket.send([Buffer.from([PROTOCOL_ID, DATAGRAM_CODES.RELIABLE_UDP_DATA_ACK]), uint16(at)], this.port, this.address);
 		debug(`Emitting ${data.length} of raw data`);
 		/**
 		 * Emitted when a packet of data has been received (properly ordered).
@@ -104,6 +110,28 @@ class StreamedUDPSession extends EventEmitter {
 		}else{
 			debug(`Re-sending packet ${id} by remote request`);
 			this.socket.send([Buffer.from([PROTOCOL_ID, DATAGRAM_CODES.RELIABLE_UDP_DATA]), obj], this.port, this.address);
+		}
+	}
+	/**
+	 * Handle a situation where the remote end has received a packet.
+	 * @param {Number} id
+	 */
+	onDataAck(id){
+		if(this.data_packets[id]){
+			debug(`Remote end ACK ${id}`);
+			this.data_packets_length -= this.data_packets[id].length;
+			delete this.data_packets[id];
+		}
+	}
+	/**
+	 * Handle remote end's send counter. If higher than recv then request resend.
+	 * @param {Number} id
+	 */
+	onStatus(id){
+		if(id > this.recv_count){
+			debug(`Remote end reported id ${id}, requesting missing parts`);
+			//this.ooo_max_id = id;
+			this.sendResendRequest(this.recv_count);
 		}
 	}
 	/**
@@ -169,6 +197,8 @@ class StreamedUDPSession extends EventEmitter {
 				}
 				res();
 			});
+			// Make sure the other peer knows about this last packet by sending a status packet
+			this.statusPacketTick();
 		});
 	}
 	/**
@@ -219,6 +249,19 @@ class StreamedUDPSession extends EventEmitter {
 		this.resend_request_timeout = clearTimeout(this.resend_request_timeout);
 		if(id < this.ooo_max_id)
 			this.outOfOrderHandle(this.recv_count);
+	}
+	/**
+	 * Notify the remote end about the sent data. Retry until the data buffer is empty.
+	 */
+	statusPacketTick(){
+		if(this.status_timeout)return;
+		if(this.data_packets_length == 0)return;
+		debug(`Sending a status packet with id ${this.send_count}`);
+		this.socket.send([Buffer.from([PROTOCOL_ID, DATAGRAM_CODES.RELIABLE_UDP_STATUS]), uint16(this.send_count)], this.port, this.address);
+		this.status_timeout = setTimeout(() => {
+			this.status_timeout = null;
+			this.statusPacketTick();
+		}, 1);
 	}
 }
 

@@ -139,13 +139,13 @@ module.exports = async function(test){
 		async function _doLossyTest(loss_chance){
 			const h1 = new ReliableSocket();
 			const h2 = new ReliableSocket();
-			await t.test('Lossy communication @ '+(loss_chance*100)+'%', async (t) => {
+			//await t.test('Lossy communication @ '+(loss_chance*100)+'%', async (t) => {
 				await new Promise(async (res, rej) => {
 					await h1.bind();
 					await h2.bind();
 					const sess1 = await h1.connect('127.0.0.1', h2.port);
 					t.ok(sess1 instanceof Session);
-					await new Promise((res) => setTimeout(res, 500));
+					await new Promise((res) => setTimeout(res, 50));
 					unreliablizeSocket(h1.socket, {loss: loss_chance});
 					unreliablizeSocket(h2.socket, {loss: loss_chance});
 					const sess2 = h2.sessions[Object.keys(h2.sessions)[0]];
@@ -153,7 +153,7 @@ module.exports = async function(test){
 					const buf = Buffer.alloc(MESSAGES);
 					const recv = Buffer.alloc(MESSAGES);
 					let recv_off = 0;
-					const guard = new Timeout(500, () => rej('Communication failed'));
+					const guard = new Timeout(5100, () => rej(`Communication failed, sess1 S/R ${sess1.recv_count}/${sess1.send_count} sess2 ${sess2.recv_count}/${sess2.send_count}`));
 					for(let i = 0; i < buf.length; i++)
 						buf[i] = (Math.random()*255) >>> 0;
 					for(let i = 0; i < MESSAGES; i++)
@@ -171,19 +171,22 @@ module.exports = async function(test){
 						}
 					});
 				});
-			});
+			//});
 			await h1.close();
 			await h2.close();
 		}
-		await _doLossyTest(0);
-		await _doLossyTest(0.05);
-		await _doLossyTest(0.1);
-		await _doLossyTest(0.15);
-		await _doLossyTest(0.2);
-		await _doLossyTest(0.25);
-		await _doLossyTest(0.3);
-		await _doLossyTest(0.35);
-		await _doLossyTest(0.4);
-		await _doLossyTest(0.45);
+		async function _lossyTestAttempts(loss_chance, attempts){
+			t.test('Lossy communication @ '+(loss_chance*100)+'%, '+attempts+' attempts', async (t) => {
+				for(let i = 0; i < attempts; i++)
+					await _doLossyTest(loss_chance);
+			});
+		}
+		await _lossyTestAttempts(0, 1);
+		await _lossyTestAttempts(0.05, 5);
+		await _lossyTestAttempts(0.15, 15);
+		await _lossyTestAttempts(0.3, 30);
+		await _lossyTestAttempts(0.45, 45);
+		await _lossyTestAttempts(0.6, 60);
+		await _lossyTestAttempts(0.8, 10);
 	});
 };

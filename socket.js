@@ -73,9 +73,10 @@ class ReliableUDPSocket extends EventEmitter {
 	 * @returns {Promise}
 	 */
 	close(){
-		return new Promise((res, rej) => {
+		return new Promise(async (res, rej) => {
 			debug.udp(`Socket bound to ${this.address}:${this.port} now closing`);
 			Object.keys(this.sessions).forEach((id) => this.sessions[id].close());
+			await new Promise(res => setTimeout(res, 1));
 			if(this.socket)
 				return this.socket.close(res);
 			res();
@@ -260,11 +261,23 @@ class ReliableUDPSocket extends EventEmitter {
 					debug.socket(`Unexpected data ack received from ${rinfo.address}:${rinfo.port}`);
 					break;
 				}
-				if(data.length == 4){
+				if(datagram.length == 4){
 					const id = datagram.readUInt16BE(2);
 					this.sessions[session_id].onDataAck(id);
 				}else{
 					debug.socket(`Invalid data ack datagram from ${rinfo.address}:${rinfo.port}`);
+				}
+			break;
+			case DATAGRAM_CODES.RELIABLE_UDP_STATUS:
+				if(!this.sessions[session_id]){
+					debug.socket(`Unexpected status received from ${rinfo.address}:${rinfo.port}`);
+					break;
+				}
+				if(datagram.length == 4){
+					const id = datagram.readUInt16BE(2);
+					this.sessions[session_id].onStatus(id);
+				}else{
+					debug.socket(`Invalid status datagram from ${rinfo.address}:${rinfo.port}`);
 				}
 			break;
 			default:
