@@ -7,6 +7,7 @@
   },
   "main": "index.js",
   "scripts": {
+    "coverage": "istanbul cover test.js",
     "test": "node test.js | node node_modules/faucet/bin/cmd",
     "docs": "node node_modules/jsdoc/jsdoc.js -c jsdoc.json"
   },
@@ -29,6 +30,7 @@
     "docdash": "^0.4.0",
     "faucet": "0.0.1",
     "glob": "^7.1.2",
+    "istanbul": "^0.4.5",
     "jsdoc": "^3.5.5",
     "zora": "^2.0.1"
   },
