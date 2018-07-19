@@ -189,4 +189,15 @@ module.exports = async function(test){
 		await _lossyTestAttempts(0.6, 60);
 		await _lossyTestAttempts(0.8, 10);
 	});
+
+	await test('Holepunching be executed multiple times with the same result', async (t) => {
+		const h1 = new ReliableSocket();
+		h1.bind();
+		const me = await h1.discoverSelf();
+		t.equal(me.length, 2);
+		const me2 = await h1.discoverSelf();
+		t.equal(me2.length, 2);
+		t.equal(me[0], me2[0]);
+		t.equal(me[1], me2[1]);
+	});
 };
