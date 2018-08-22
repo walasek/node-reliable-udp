@@ -25,7 +25,37 @@ npm t
 
 ## Usage
 
-_TODO, the library is not usable right now_
+Beware this project is still in development. There may be serious bugs or performance issues over time.
+
+```javascript
+async () => {
+    // Create a reliable UDP socket
+    const ReliableUDPSocket = require('reliable-udp');
+    const server = new ReliableUDPSocket({ port: 12345 });
+    await server.bind();
+
+    // Connect to another peer
+    const peer = await server.connect('192.168.0.15', 12345);
+
+    // Send some raw data as a stream
+    const data = Buffer.from("SomeGenericDataHere");
+    peer.sendBuffer(data);
+
+    // Receive raw data as a stream
+    peer.on('data', (data) => {
+        console.log(`Received: ${data}`);
+    });
+
+    // Execute holepunching (get an address and port that another peer over the internet can use to reach this peer)
+    const hole = await server.discoverSelf();
+
+    // Close a particular session
+    peer.close();
+
+    // Close all current sessions and unbind
+    server.close();
+}();
+```
 
 ## Contributing
 
@@ -44,6 +74,7 @@ DEBUG=reliable-udp:* npm t
 The documentation will be put in the new `docs` directory.
 
 To introduce an improvement please fork this project, commit changes in a new branch to your fork and add a pull request on this repository pointing at your fork. Please follow these style recommendations when working on the code:
+
 * Use tabs (yup).
 * Use `async`/`await` and/or `Promise` where possible.
 * Features must be properly tested.
