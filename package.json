@@ -13,7 +13,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/WalasPrime/node-reliable-udp.git"
+    "url": "git+https://github.com/walasek/node-reliable-udp.git"
   },
   "keywords": [
     "nodejs",
@@ -23,9 +23,9 @@
   "author": "Karol Walasek <coreconviction@gmail.com>",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/WalasPrime/node-reliable-udp/issues"
+    "url": "https://github.com/walasek/node-reliable-udp/issues"
   },
-  "homepage": "https://github.com/WalasPrime/node-reliable-udp#readme",
+  "homepage": "https://github.com/walasek/node-reliable-udp#readme",
   "devDependencies": {
     "docdash": "^0.4.0",
     "faucet": "0.0.1",
