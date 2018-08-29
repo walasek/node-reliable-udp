@@ -8,10 +8,12 @@ const crypto = require('crypto');
 const stun = require('stun');
 const EventEmitter = require('events');
 const dgram = require('dgram');
+const dns = require('dns');
 const debug = {
 	stun: require('debug')('reliable-udp:stun'),
 	udp: require('debug')('reliable-udp:udp'),
-	socket: require('debug')('reliable-udp:socket')
+	socket: require('debug')('reliable-udp:socket'),
+	dns: require('debug')('reliable-udp:dns')
 };
 
 const { STUN_BINDING_REQUEST, STUN_ATTR_XOR_MAPPED_ADDRESS } = stun.constants;
@@ -128,6 +130,30 @@ class ReliableUDPSocket extends EventEmitter {
 		return Buffer.from([PROTOCOL_ID, DATAGRAM_CODES.RELIABLE_UDP_ESTABLISH]);
 	}
 	/**
+	 * Perform a DNS lookup.
+	 * @param {String} hostname A hostname to convert to an IP address.
+	 * @param {Object} [options] Options object (passed as a parameter to _dns.lookup_). Default options request an IPv4 address.
+	 * @returns {Promise} An IP address for the host.
+	 */
+	async lookup(hostname, options){
+		return new Promise((res, rej) => {
+			debug.dns(`Resolving hostname ${hostname}`);
+			const guard = new Timeout(3000, () => rej('Lookup timeout'));
+			dns.lookup(hostname, options || {family: 4}, (err, address) => {
+				if(!guard.enterGate()){
+					debug.dns(`Response to ${hostname} came too late`);
+					return;
+				}
+				if(err){
+					debug.dns(`Could not resolve ${hostname}`);
+					return rej(err);
+				}
+				debug.dns(`Hostname ${hostname} is ${address}`);
+				res(address);
+			});
+		});
+	}
+	/**
 	 * @description
 	 * Execute the holepunching algorithm to create an address that another peer can connect to.
 	 *
@@ -137,29 +163,34 @@ class ReliableUDPSocket extends EventEmitter {
 	 * @returns {Promise} Resolves with an array of pair [ip, port] as a result of holepunching, or rejects with an error message.
 	 */
 	discoverSelf(options){
-		return new Promise((res, rej) => {
-			options = options || {};
-			const server = stun.createServer(this.socket);
-			const request = stun.createMessage(STUN_BINDING_REQUEST);
-			debug.stun(`STUN requesting a binding response`);
+		return new Promise(async (res, rej) => {
+			try {
+				let stun_addr = await this.lookup('stun.l.google.com');
+				options = options || {};
+				const server = stun.createServer(this.socket);
+				const request = stun.createMessage(STUN_BINDING_REQUEST);
+				debug.stun(`STUN requesting a binding response`);
 
-			const guard = new Timeout(3000, () => {});
-			server.once('bindingResponse', (stunMsg) => {
-				if(!guard.enterGate()){
-					debug.stun(`Bidding response came back too late`);
-					return;
-				}
-				const results = {
-					ip: stunMsg.getAttribute(STUN_ATTR_XOR_MAPPED_ADDRESS).value.address,
-					port: stunMsg.getAttribute(STUN_ATTR_XOR_MAPPED_ADDRESS).value.port
-				};
-				debug.stun(`STUN Binding Response: ${JSON.stringify(stunMsg.getAttribute(STUN_ATTR_XOR_MAPPED_ADDRESS).value)}`);
+				const guard = new Timeout(3000, () => rej('STUN binding request timeout'));
+				server.once('bindingResponse', (stunMsg) => {
+					if(!guard.enterGate()){
+						debug.stun(`Bidding response came back too late`);
+						return;
+					}
+					const results = {
+						ip: stunMsg.getAttribute(STUN_ATTR_XOR_MAPPED_ADDRESS).value.address,
+						port: stunMsg.getAttribute(STUN_ATTR_XOR_MAPPED_ADDRESS).value.port
+					};
+					debug.stun(`STUN Binding Response: ${JSON.stringify(stunMsg.getAttribute(STUN_ATTR_XOR_MAPPED_ADDRESS).value)}`);
 
-				res([results.ip, results.port]);
-				setImmediate(() => server.close());
-			});
+					res([results.ip, results.port]);
+					setImmediate(() => server.close());
+				});
 
-			server.send(request, options.port || 19302, options.address || 'stun.l.google.com');
+				server.send(request, options.port || 19302, options.address || stun_addr);
+			}catch(err){
+				rej(err);
+			}
 		});
 	}
 	/**
