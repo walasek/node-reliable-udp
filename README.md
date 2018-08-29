@@ -28,7 +28,7 @@ npm t
 Beware this project is still in development. There may be serious bugs or performance issues over time.
 
 ```javascript
-async () => {
+(async () => {
     // Create a reliable UDP socket
     const ReliableUDPSocket = require('reliable-udp');
     const server = new ReliableUDPSocket({ port: 12345 });
@@ -54,7 +54,7 @@ async () => {
 
     // Close all current sessions and unbind
     server.close();
-}();
+})();
 ```
 
 ## Contributing
