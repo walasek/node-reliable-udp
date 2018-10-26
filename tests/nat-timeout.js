@@ -17,7 +17,7 @@ const debug = require('debug')('reliable-udp:nat-timeout');
 				}
 
 				if(last_port === hole_port){
-					await new Promise(res => setTimeout(res, 60000));
+					await new Promise(res => setTimeout(res, 10000));
 				}else{
 					debug(`${new Date()} UDP holepunch port changed to ${hole_port}`);
 					last_port = hole_port;
