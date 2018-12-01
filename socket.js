@@ -62,7 +62,9 @@ class ReliableUDPSocket extends EventEmitter {
 				exclusive: true
 			}, () => {
 				this.socket.removeListener('error', handleErrors);
-				this.socket.unref();
+				//this.socket.unref();
+				if(this.port && this.port !== this.socket.address().port)
+					throw Error('Could not bind to port '+this.port);
 				this.port = this.socket.address().port;
 				this.socket.on('message', (data, rinfo) => this.handleDatagram(data, rinfo));
 				debug.udp(`Binding to ${this.address}:${this.port} successful`);
@@ -75,12 +77,15 @@ class ReliableUDPSocket extends EventEmitter {
 	 * @returns {Promise}
 	 */
 	close(){
+		this.removeAllListeners();
 		return new Promise(async (res, rej) => {
 			debug.udp(`Socket bound to ${this.address}:${this.port} now closing`);
 			Object.keys(this.sessions).forEach((id) => this.sessions[id].close());
 			await new Promise(res => setTimeout(res, 1));
-			if(this.socket)
+			if(this.socket){
+				this.socket.unref();
 				return this.socket.close(res);
+			}
 			res();
 		});
 	}
@@ -266,7 +271,16 @@ class ReliableUDPSocket extends EventEmitter {
 				delete this.hello_queue[session_id];
 				this.sessions[session_id] = new Session(this.socket, rinfo.address, rinfo.port);
 				debug.socket(`Connection with ${rinfo.address}:${rinfo.port} (${session_id}) established`);
+				/**
+				 * Emited when a connection has been established by another peer.
+				 * @event StreamedUDPSession#new-peer
+				 * @type {StreamedUDPSession}
+				 */
 				this.emit('new-peer', this.sessions[session_id]);
+				this.sessions[session_id].once('close', () => {
+					debug.socket(`Session ${session_id} from ${rinfo.address}:${rinfo.port} dropped`);
+					delete this.sessions[session_id];
+				});
 			break;
 			case DATAGRAM_CODES.RELIABLE_UDP_DATA:
 				if(!this.sessions[session_id]){

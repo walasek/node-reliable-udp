@@ -4,7 +4,7 @@
     },
     "recurseDepth": 10,
     "source": {
-        "include": ["README.md", "index.js", "timeout.js", "session.js"],
+        "include": ["README.md", "index.js", "timeout.js", "session.js", "messaging.js", "socket.js"],
         "includePattern": ".js(doc)?$",
 		"excludePattern": "(node_modules/|docs)",
 		"recurse": true

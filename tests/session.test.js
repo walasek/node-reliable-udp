@@ -34,6 +34,7 @@ module.exports = async function(test){
 			t.notEqual(Buffer.compare(p1_1, p1_2, 'sendPacket affects state'));
 			t.equal(p1_2[1], 5, 'Increased id');
 			res();
+			await sess.close();
 		});
 	});
 };

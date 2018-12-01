@@ -31,6 +31,13 @@ module.exports = async function(test){
 		await host.close();
 	});
 
+	await test('Can bind to a specific port', async (t) => {
+		const host = new ReliableSocket({port: 10023});
+		await host.bind();
+		t.equal(host.port, 10023, 'Port is proper');
+		await host.close();
+	});
+
 	await test('Can discover self', async (t) => {
 		const host = new ReliableSocket();
 		await host.bind();
@@ -139,39 +146,37 @@ module.exports = async function(test){
 		async function _doLossyTest(loss_chance){
 			const h1 = new ReliableSocket();
 			const h2 = new ReliableSocket();
-			//await t.test('Lossy communication @ '+(loss_chance*100)+'%', async (t) => {
-				await new Promise(async (res, rej) => {
-					await h1.bind();
-					await h2.bind();
-					const sess1 = await h1.connect('127.0.0.1', h2.port);
-					t.ok(sess1 instanceof Session);
-					await new Promise((res) => setTimeout(res, 50));
-					unreliablizeSocket(h1.socket, {loss: loss_chance});
-					unreliablizeSocket(h2.socket, {loss: loss_chance});
-					const sess2 = h2.sessions[Object.keys(h2.sessions)[0]];
-					const MESSAGES = 100;
-					const buf = Buffer.alloc(MESSAGES);
-					const recv = Buffer.alloc(MESSAGES);
-					let recv_off = 0;
-					const guard = new Timeout(5100, () => rej(`Communication failed, sess1 S/R ${sess1.recv_count}/${sess1.send_count} sess2 ${sess2.recv_count}/${sess2.send_count}`));
-					for(let i = 0; i < buf.length; i++)
-						buf[i] = (Math.random()*255) >>> 0;
-					for(let i = 0; i < MESSAGES; i++)
-						sess1.sendBuffer(Buffer.from([buf[i]]));
-					sess2.on('data', (data) => {
-						if(!guard.isActive())return;
-						data.copy(recv, recv_off);
-						recv_off += data.length;
-						if(recv_off >= MESSAGES){
-							// Done.
-							t.equal(MESSAGES, recv_off, 'Data length is ok');
-							t.equal(Buffer.compare(recv, buf), 0, 'Received data is valid');
-							guard.dismiss();
-							res();
-						}
-					});
+			await new Promise(async (res, rej) => {
+				await h1.bind();
+				await h2.bind();
+				const sess1 = await h1.connect('127.0.0.1', h2.port);
+				t.ok(sess1 instanceof Session);
+				await new Promise((res) => setTimeout(res, 50));
+				unreliablizeSocket(h1.socket, {loss: loss_chance});
+				unreliablizeSocket(h2.socket, {loss: loss_chance});
+				const sess2 = h2.sessions[Object.keys(h2.sessions)[0]];
+				const MESSAGES = 100;
+				const buf = Buffer.alloc(MESSAGES);
+				const recv = Buffer.alloc(MESSAGES);
+				let recv_off = 0;
+				const guard = new Timeout(5100, () => rej(`Communication failed, sess1 S/R ${sess1.recv_count}/${sess1.send_count} sess2 ${sess2.recv_count}/${sess2.send_count}`));
+				for(let i = 0; i < buf.length; i++)
+					buf[i] = (Math.random()*255) >>> 0;
+				for(let i = 0; i < MESSAGES; i++)
+					sess1.sendBuffer(Buffer.from([buf[i]]));
+				sess2.on('data', (data) => {
+					if(!guard.isActive())return;
+					data.copy(recv, recv_off);
+					recv_off += data.length;
+					if(recv_off >= MESSAGES){
+						// Done.
+						t.equal(MESSAGES, recv_off, 'Data length is ok');
+						t.equal(Buffer.compare(recv, buf), 0, 'Received data is valid');
+						guard.dismiss();
+						res();
+					}
 				});
-			//});
+			});
 			await h1.close();
 			await h2.close();
 		}

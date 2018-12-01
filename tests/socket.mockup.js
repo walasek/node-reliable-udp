@@ -4,7 +4,7 @@ function SocketMockupDecorator(socket, options){
 	options = options || {};
 	options.loss = options.loss || 0;
 	socket = socket || {
-		send: (_1, _2, _3, cb) => {cb();}
+		send: (_1, _2, _3, cb) => {if(cb)cb();}
 	};
 
 	// TODO: Add packet shuffling
