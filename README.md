@@ -40,7 +40,7 @@ Beware this project is still in development. There may be serious bugs or perfor
     await server.bind();
 
     // Connect to another peer
-    const peer = await server.connect('192.168.0.15', 12345);
+    const peer = await server.connect('127.0.0.1', 12345);
 
     // Send some raw data as a stream
     const data = Buffer.from("SomeGenericDataHere");
