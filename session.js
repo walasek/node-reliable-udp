@@ -66,7 +66,7 @@ class StreamedUDPSession extends EventEmitter {
 		this.closed = true;
 		this.socket = null;
 		/**
-		 * Emited when this session is closed.
+		 * Emitted when this session is closed.
 		 * @event StreamedUDPSession#close
 		 */
 		this.emit('close');
@@ -81,10 +81,10 @@ class StreamedUDPSession extends EventEmitter {
 		}
 	}
 	/**
-	 * Process incomming raw data. Emit events when complete messages are decoded.
+	 * Process incoming raw data. Emit events when complete messages are decoded.
 	 * @param {Buffer} raw Raw data received from the network.
 	 */
-	onIncommingData(raw){
+	onIncomingData(raw){
 		const at = raw.readUInt16BE();
 		const data = raw.slice(2);
 		debug(`#${this.port} Received ${raw.length} bytes on session with ${this.address}:${this.port}, id ${at}`);
@@ -134,7 +134,7 @@ class StreamedUDPSession extends EventEmitter {
 					delete this.ooo_packet_map[at];
 					this.ooo_packets_size -= raw.length;
 					// Prevent a stack overflow attack
-					setImmediate(() => this.onIncommingData(raw));
+					setImmediate(() => this.onIncomingData(raw));
 					break;
 				}
 			}

@@ -17,7 +17,7 @@ module.exports = async function(test){
 				t.equal(data[2], 15);
 				res();
 			});
-			sess.onIncommingData(packet);
+			sess.onIncomingData(packet);
 		});
 	});
 

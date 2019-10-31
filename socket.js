@@ -235,7 +235,7 @@ class ReliableUDPSocket extends EventEmitter {
 		});
 	}
 	/**
-	 * Handle incomming datagrams.
+	 * Handle incoming datagrams.
 	 * @param {Buffer} datagram
 	 * @param {Object} rinfo Remote host information.
 	 * @param {String} rinfo.address Remote host IP address.
@@ -287,7 +287,7 @@ class ReliableUDPSocket extends EventEmitter {
 					debug.socket(`Unexpected data received from ${rinfo.address}:${rinfo.port}`);
 					break;
 				}
-				this.sessions[session_id].onIncommingData(datagram.slice(2));
+				this.sessions[session_id].onIncomingData(datagram.slice(2));
 			break;
 			case DATAGRAM_CODES.RELIABLE_UDP_RESEND_REQ:
 				if(!this.sessions[session_id]){
